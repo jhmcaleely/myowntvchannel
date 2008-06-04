@@ -1,0 +1,19 @@
+
+# The mime types we need for the files MyOwnTVChannel generates.
+AddType application/x-bittorrent .torrent
+AddType application/rss+xml .rss
+
+# Optional - configuration for smarter URLs.
+# May not work for all configurations of Apache, due to site-local policies.
+
+# for removing index.php from urls
+#DirectoryIndex index.php index.html
+
+# for removing .php and .rss from URLs
+#Options +MultiViews
+
+# to enable .torrent as a valid URL. Replace /motc with the correct
+# URL on this server.
+#RewriteEngine on
+#RewriteCond %{REQUEST_FILENAME} !-f
+#RewriteRule ^(.*)\.torrent$         /motc/ts/torrent?url=/motc/$1 [L]

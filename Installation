@@ -1,0 +1,123 @@
+# MyOwnTVChannel v0.1.0 Installation Instructions #
+<john@mcaleely.com>, 4th June 2008
+
+Before installing MyOwnTVChannel, you should make sure you have a web hosting service which provides:
+
+ * Apache web server (Most recent versions work)
+ * PHP v5.2.0 or higher
+ * MySQL v5 or higher
+
+You need to create a MySQL database, and note these details for it:
+
+ * Server Name (eg `db.example.com`)
+ * Database Name (eg `example_sql`)
+ * Database full access username (eg `user_full`)
+ * Password for the full access username (eg `pass1234`)
+
+You will need to be able to ftp files to your server, and you will need command line access to set the correct access permissions.
+
+# First Time Installation
+
+Step 1: Put the files into the correct locations
+
+Log in to your web provider, and decide where you will install MyOwnTVChannel. Place the motc0.1.0.tgz file here. By default, the files will be installed into a 'motc/' subdirectory, but you can rename or remove this if you wish.
+
+    cd <install-dir>
+    tar -xvzf motc0.1.0.tgz
+    chmod 0777 motc
+    
+    cp motc/ts/admin/template.motc-config.php motc/ts/admin/motc-config.php 
+    cp motc/template.htaccess motc/.htaccess
+
+Step 2: Edit the configuration
+
+Edit the file: `<install-dir>/motc/ts/admin/motc-config.php` and modify these lines with the information you noted before:
+
+    // the dns name or IP address of your MySQL database server
+    define('MOTC_DB_SERVER', 'db.example.com');
+
+    // the name of the database to store MyOwnTVChannel data in
+    define('MOTC_DB_NAME', 'example_sql');
+
+    // The MySQL username. Must have create/drop table 
+    // permission and read-write permission
+    define('MOTC_DB_USER', 'user_full');
+
+	// the password for MOTC_DB_USER    
+	define('MOTC_DB_PASSWORD', 'pass1234');
+ 
+Step 3: Visit setup.php, and choose a username
+
+Visit the url `http://example.com/motc/ts/admin/setup.php`
+
+Enter the username and password you want to use to control access to the ability to edit and modify your channels. Note that you have to enter the password twice.
+
+Step 4: There is no step 4 - just upload some media clips to the 'motc' directory and start creating your first channel.
+
+# Upgrade Instructions
+
+Upgrading is simply a case of copying the new version of MyOwnTVChannel over the existing installation. Future upgrades may require you to update the .htaccess or ts/admin/motc-config.php files, and then visit the setup.php script. However, these are not a requirement at this time.
+
+# Smarter URLs
+
+By default, the configuration leaves various details of its implementation in the URLs it creates. Specifically:
+
+ 1. `index.php` is left in the admin url path
+ 2. `.php` and `.rss` are left in other urls
+ 3. torrent files are accessed via a script query, rather than simply by adding `.torrent` to the URL.
+
+These can all be removed by configuring Apache correctly, and then updating the `ts/admin/motc-config.php` file to let MyOwnTVChannel know it should generate nicer URLs. You can make these changes at any time, and use the 'Rebuild Torrents' button to update the URLs in the `.torrent` files. 
+
+You may find that your web provider does not let you enable all of these options via .htaccess files.
+
+ 1. Removing `index.php` from the admin url path
+
+    The simplest to change, just make sure your Apache configuration selects index.php as a directory index document. This is often configured by default, but to be sure, add this line to `motc/.htaccess`:
+
+		DirectoryIndex index.php
+
+	and modify `ts/admin/motc-config.php` to have this line:
+
+    	define('MOTC_HIDE_INDEX', TRUE);
+
+ 2. Removing the `.php` and `.rss` from other URLs
+
+    Strictly speaking, showing the user that we keep RSS information in files ending in .rss, or that the site is implemented in php is more information than they want, and is also something we may wish to change in future. Removing these requires enabling the 'Multiviews' feature in Apache, via this line in `motc/.htaccess`:
+
+		Options +MultiViews
+	
+	and modify `ts/admin/motc-config.php` to have this line:
+
+		define('MOTC_HIDE_INTERNAL_EXT', TRUE);
+	
+ 3. Enabling access to torrent files via .torrent URLs
+
+	If you would like the simplicity of adding `.torrent` to any channel item's URL to get its torrent file, Apache needs to detect if the file already exists, and if not, redirect the request to the script that creates the torrent files. Note that Apache isn't needed to check if it's OK to generate the torrent file, the script will do that.
+
+	The simplest way to do this is with the mod_rewrite Apache plugin, which can be configured in `motc/.htaccess` with:
+	
+		RewriteEngine on
+		RewriteCond %{REQUEST_FILENAME} !-f
+		RewriteRule ^(.*)\.torrent$         /motc/ts/torrent?url=/motc/$1 [L]
+	
+	Notice where the default install of /motc is assumed, and you will need to edit this to suit where you have MyOwnTVChannel installed. You then need to modify `ts/admin/motc-config.php` to have this line:
+	
+		define('MOTC_REWRITE_TORRENTS', TRUE);
+		
+# File Permissions
+
+In order to create the channel RSS feed, and torrent files, MyOwnTVChannel needs read and write access to rss and torrent files, while needing read, write and execute permission for channel directories. These will be needed for the user that Apache runs the script as. Therefore the minimal permissions will be 0755 for directories and 0644 for files. On most systems, the user that PHP runs as will differ from the one you log in with ftp to manage files with. If the two users are in the same group, you could use 0775 and 0664 respectively, but this is only going to work on some systems. In order to work best on most systems, MyOwnTVChannel defaults to providing global read/write access, so that the web server and your ftp client login can manage the same files, using 0777 for directories and 0666 for files.
+
+The risks of unwanted writes to these files are minimised by MyOwnTVChannel providing no means for web users to write arbitrary files, and so the defaults in `ts/admin/motc-config.php`:
+
+	define('MOTC_MODE_DIR', 0777);
+	define('MOTC_MODE_FILE', 0666);
+
+provide good security and usability. If your setup allows, you can tighten these as discussed.
+
+# Thanks
+
+Thank you for using MyOwnTVChannel. I hope you find it useful.
+
+John McAleely
+<john@mcaleely.com>
