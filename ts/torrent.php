@@ -44,6 +44,13 @@ if (!isset($publish_item)) {
 }
 
 $media_stats = stat($config->base_path.'/'.$publish_item->filename);
+if ($media_stats === FALSE) {	// the file is in the channel config, but couldn't be found on disk. Will heal next time the channel is rebuilt.
+	ui_writePlainMessageDoc(404, "File Not Found");
+	exit(0);
+}
+
+
+
 if (   !file_exists($config->base_path.'/'.$publish_item->torrent_file)
     || $publish_item->lastmod != $media_stats['mtime']
     || $_POST['cache'] == 'ignore') {
@@ -51,6 +58,14 @@ if (   !file_exists($config->base_path.'/'.$publish_item->torrent_file)
 	$media = fopen($config->base_path.'/'.$publish_item->filename, "rb");	
 	$torrent = fopen($config->base_path.'/'.$publish_item->torrent_file, "wb");
 	chmod($config->base_path.'/'.$publish_item->torrent_file, MOTC_MODE_FILE);
+	
+	if ($media === FALSE || $torrent === FALSE) { // something changed on disk since this torrent was registered. 
+												  // Give up, and hope it fixes itself when the channel is rebuilt.
+												  // if we proceed, the apache logs will fill with garbage errors while
+												  // we use the bad handles.
+		ui_writePlainMessageDoc(404, "File Not Found");
+		exit(0);
+	}
 
 	// crude check that the script completes, and produces a valid torrent.
 	$publish_item->lastmod = 0;
@@ -58,7 +73,7 @@ if (   !file_exists($config->base_path.'/'.$publish_item->torrent_file)
 	$payload['trackerurl'] = (string) $config->announce_url;
 	$payload['filename'] = (string) $publish_item->filename;
 	$payload['filelength'] = $media_stats['size'];
-	$payload['fileurl'] = $cf_hosturl.$config->base_url.$publish_item->filename;
+	$payload['fileurl'] = $cf_hosturl.$config->base_url.rawurlencode($publish_item->filename);
 	$payload['piecelen'] = MOTC_TORRENT_PIECE_LEN;
 
 	$io['in'] = $media;

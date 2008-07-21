@@ -206,6 +206,8 @@ function db_tables_present() {
 
 
 function binary_as_hex($bin) {
+	// kill a 'notice' from common logging settings
+	$result = '';
 	
 	for($i = 0; $i < strlen($bin); $i++) {
 		$result .= sprintf("%02x", ord($bin[$i]));
@@ -216,6 +218,8 @@ function binary_as_hex($bin) {
 
 
 function hex_as_binary($hex) {
+	// kill a 'notice' from common logging settings
+	$result = '';
 
 	for($i = 0; $i < strlen($hex); $i += 2) {
 		$result .= chr(hexdec(substr($hex, $i, 2)));
@@ -235,6 +239,8 @@ function mysql_motc_rec_exists($col, $table, $condition) {
 
 
 function int_to_dq($uint) {
+	
+	$dq = '';
 	
 	for ($i = 0; $i < 4; $i++) {
 		$dq .= ($uint >> (3-$i)*8) & 0xff;

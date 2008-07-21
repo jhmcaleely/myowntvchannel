@@ -24,13 +24,16 @@ function cfcms_url_channel_item($script, $cf_channel, $cf_item = null) {
 			return $cf_channel->base_url.$cf_channel->channel_html_file;
 		}
 	}
+	else if ($script == 'file') {
+		return $cf_channel->base_url.rawurlencode($cf_item->filename);
+	}
 	else if ($script == 'torrent' && MOTC_REWRITE_TORRENTS) {
-		return $cf_channel->base_url.$cf_item->torrent_file;
+		return $cf_channel->base_url.rawurlencode($cf_item->torrent_file);
 	}
 	else if ($script == 'torrent') {
 		$url = cf_url_for_script('torrent');
-		$query = 'channel='.urlencode($cf_channel->base_url);
-		$query .= '&filename='.urlencode($cf_item->filename);
+		$query = 'channel='.rawurlencode($cf_channel->base_url);
+		$query .= '&filename='.rawurlencode($cf_item->filename);
 		
 		return $url.'?'.$query;
 	}
@@ -101,7 +104,7 @@ function cms_write_channel_rss($cf_channel) {
 		foreach ($cf_channel->items->item as $i) {
 
 			if ( $i->status == 'included') {
-				cms_writeItem($channelxml, $i, $cf_channel, $date);
+				cms_writeItem($channelxml, $i, $cf_channel, TRUE, $date);
 			}
 			$channel_date = max($date, $channel_date);
 		}
@@ -165,7 +168,9 @@ function cms_write_channel_html($cf_channel) {
 					$xml->writeElement('p', $i->description);
 				}
 				$xml->text('(');
-				ui_writeLink($xml, cfcms_url_channel_item('torrent', $cf_channel, $i), 'download');
+				ui_writeLink($xml, cfcms_url_channel_item('torrent', $cf_channel, $i), 'torrent');
+				$xml->text('|');
+				ui_writeLink($xml, cfcms_url_channel_item('file', $cf_channel, $i), 'download');
 				$xml->text(')');
 
 				$xml->endElement();
@@ -220,7 +225,7 @@ function cms_endChannel($xml) {
 }
 
 
-function cms_writeItem($xml, $item, $cf_channel, &$date) {
+function cms_writeItem($xml, $item, $cf_channel, $enclose_torrent, &$date) {
 	
 	global $cf_motc;
 
@@ -229,11 +234,34 @@ function cms_writeItem($xml, $item, $cf_channel, &$date) {
 	$xml->writeElement('description', $item->description);
 	$xml->writeElement('link', $cf_motc['host_url'].cfcms_url_channel_item('html', $cf_channel));
 	$xml->writeElement('guid', $cf_motc['host_url'].$cf_channel->base_url.$item->filename);
-	$xml->startElement('enclosure');
-	$xml->writeAttribute('length', $item->torrent_length);
-	$xml->writeAttribute('type', 'application/x-bittorrent');
-	$xml->writeAttribute('url', $cf_motc['host_url'].cfcms_url_channel_item('torrent', $cf_channel, $item));
-	$xml->endElement();
+
+	$info = apache_lookup_uri(cfcms_url_channel_item('file', $cf_channel, $item));
+	$file_info = stat($cf_channel->base_path.'/'.$item->filename);
+	
+	if ($enclose_torrent) {
+		$xml->startElement('enclosure');
+		$xml->writeAttribute('length', $item->torrent_length);
+		if ($info->content_type) {
+			$xml->writeAttribute('type', 'application/x-bittorrent;enclosed='.$info->content_type);
+		}
+		else {
+			$xml->writeAttribute('type', 'application/x-bittorrent');
+		}
+		$xml->writeAttribute('url', $cf_motc['host_url'].cfcms_url_channel_item('torrent', $cf_channel, $item));
+		$xml->endElement();
+	}
+	else {
+		$xml->startElement('enclosure');
+		$xml->writeAttribute('length', $file_info['size']);
+		if ($info->content_type) {
+			$xml->writeAttribute('type', $info->content_type);
+		}
+		else {
+			$xml->writeAttribute('type', 'application/octet-stream');// default to an unknown binary file.
+		}
+		$xml->writeAttribute('url', $cf_motc['host_url'].cfcms_url_channel_item('file', $cf_channel, $item));
+		$xml->endElement();
+	}
 	
 	if (isset($item->icon) && $item->icon != 'none') {
 		$xml->startElementNS('media', 'thumbnail', 'http://search.yahoo.com/mrss/');

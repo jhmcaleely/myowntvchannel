@@ -38,7 +38,7 @@ if ($cf_is_authorised) {
 		if (isset($_POST['create_'.$testpath])) {
 			make_channel($cx['localdir'], $_POST['title_'.$testpath], $message);
 		}
-		else if (isset($_POST['delete_'.urlencode($cx['localurl'])])) {
+		else if (isset($cx['localurl']) && isset($_POST['delete_'.urlencode($cx['localurl'])])) {
 			cms_remove_channel($cx['localurl']);
 			$message = 'Channel deleted';
 		}
@@ -57,7 +57,7 @@ ui_writeHeader($op, 'home');
 ui_writeBrandedTitle($op, 'My Own TV Channel Admin');
 $op->writeElement('hr');
 
-if ($message) {
+if (isset($message)) {
 	$op->text($message);
 	$op->text(' | ');
 }
