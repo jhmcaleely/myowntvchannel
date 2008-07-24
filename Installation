@@ -1,5 +1,5 @@
-# MyOwnTVChannel v0.1.0 Installation Instructions #
-<john@mcaleely.com>, 4th June 2008
+# MyOwnTVChannel v0.2.1 Installation Instructions #
+<john@mcaleely.com>, 24th July 2008
 
 Before installing MyOwnTVChannel, you should make sure you have a web hosting service which provides:
 
@@ -20,10 +20,10 @@ You will need to be able to ftp files to your server, and you will need command 
 
 Step 1: Put the files into the correct locations
 
-Log in to your web provider, and decide where you will install MyOwnTVChannel. Place the motc0.1.0.tgz file here. By default, the files will be installed into a 'motc/' subdirectory, but you can rename or remove this if you wish.
+Log in to your web provider, and decide where you will install MyOwnTVChannel. Place the motc0.2.1.tgz file here. By default, the files will be installed into a 'motc/' subdirectory, but you can rename or remove this if you wish.
 
     cd <install-dir>
-    tar -xvzf motc0.1.0.tgz
+    tar -xvzf motc0.2.1.tgz
     chmod 0777 motc
     
     cp motc/ts/admin/template.motc-config.php motc/ts/admin/motc-config.php 
