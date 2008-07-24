@@ -10,7 +10,7 @@ require('motc-internal.php');
 $cf_motc = cf_globals();
 db_open();
 $cf_is_authorised = user_connection_is_authorised($cf_user, $cf_is_expired);
-
+$redirect = FALSE;
 
 header('Content-Type: text/html; charset=UTF-8');
 
@@ -48,7 +48,7 @@ ui_writeBrandedTitle($op, 'My Own TV Channel Login');
 if (!$cf_is_authorised) {
 	ui_startForm($op, '');
 	$op->text("User:");
-	ui_writeInputText($op, 'user', 30, $_GET['user']);
+	ui_writeInputText($op, 'user', 30, isset($_GET['user']) ? $_GET['user'] : '');
 	$op->text("Password:");
 	ui_writeInputPass($op, 'password', 30);
 	ui_writeInputSubmit($op, 'Login');

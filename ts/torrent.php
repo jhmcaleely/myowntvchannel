@@ -53,7 +53,10 @@ if ($media_stats === FALSE) {	// the file is in the channel config, but couldn't
 
 if (   !file_exists($config->base_path.'/'.$publish_item->torrent_file)
     || $publish_item->lastmod != $media_stats['mtime']
-    || $_POST['cache'] == 'ignore') {
+    || (isset($_POST['cache']) && $_POST['cache'] == 'ignore')) {
+
+	// crude check that the script completes, and produces a valid torrent.
+	$publish_item->lastmod = 0;
 
 	$media = fopen($config->base_path.'/'.$publish_item->filename, "rb");	
 	$torrent = fopen($config->base_path.'/'.$publish_item->torrent_file, "wb");
@@ -66,9 +69,6 @@ if (   !file_exists($config->base_path.'/'.$publish_item->torrent_file)
 		ui_writePlainMessageDoc(404, "File Not Found");
 		exit(0);
 	}
-
-	// crude check that the script completes, and produces a valid torrent.
-	$publish_item->lastmod = 0;
 	
 	$payload['trackerurl'] = (string) $config->announce_url;
 	$payload['filename'] = (string) $publish_item->filename;

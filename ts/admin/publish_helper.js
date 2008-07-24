@@ -26,8 +26,16 @@ function add_workitem(file, id) {
 
 function next_workitem(hook, request) {
 
+	if (request.readyState != 4) return;
+
 	var link = document.getElementById(hook.statusid);
-	link.firstChild.nodeValue='torrent ready';
+
+	if (request.status != 200 && request.status != 304) {
+		link.firstChild.nodeValue='http error: ' + request.status;
+	}
+	else {
+		link.firstChild.nodeValue='torrent ready';
+	}
 
 	request_next_torrent();
 }
@@ -58,14 +66,7 @@ function sendRequest(url,callback,hook,postData) {
 	req.setRequestHeader('User-Agent','XMLHTTP/1.0');
 	if (postData)
 		req.setRequestHeader('Content-type','application/x-www-form-urlencoded');
-	req.onreadystatechange = function () {
-		if (req.readyState != 4) return;
-		if (req.status != 200 && req.status != 304) {
-//			alert('HTTP error ' + req.status);
-			return;
-		}
-		callback(hook, req);
-	}
+	req.onreadystatechange = function () { callback(hook, req); }
 	if (req.readyState == 4) return false;
 	req.send(postData);
 	return true;

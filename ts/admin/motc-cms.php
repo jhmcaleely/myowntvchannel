@@ -5,49 +5,52 @@
  */
 
 
-function cfcms_url_channel_item($script, $cf_channel, $cf_item = null) {
+function cfcms_url_of_file_parameter($cf_channel, $file) {
+
+	if (cfcms_is_default_filename($cf_channel->$file)) {
+		return $cf_channel->base_url;
+	}
 	
-	if ($script == 'rss') {
-		if (MOTC_HIDE_INTERNAL_EXT) {
-			return $cf_channel->base_url.pathinfo($cf_channel->channel_rss_file, PATHINFO_FILENAME);
-		}
-		return $cf_channel->base_url.$cf_channel->channel_rss_file;
+	$fileurl = $cf_channel->$file;
+	
+	if (MOTC_HIDE_INTERNAL_EXT) {
+		$fileurl = pathinfo($cf_channel->$file, PATHINFO_FILENAME);
 	}
-	else if ($script == 'html') {
-		if (cfcms_is_default_filename($cf_channel->channel_html_file)) {
-			return $cf_channel->base_url;
-		}
-		else if (MOTC_HIDE_INTERNAL_EXT) {
-			return $cf_channel->base_url.pathinfo($cf_channel->channel_html_file, PATHINFO_FILENAME);
-		}
-		else {
-			return $cf_channel->base_url.$cf_channel->channel_html_file;
-		}
+
+	return $cf_channel->base_url.rawurlencode($fileurl);
+}
+
+
+function cfcms_url_channel_item($script, $cf_channel, $cf_item = null) {
+	global $cf_channel_files;
+
+	foreach($cf_channel_files as $name) {
+		if ($script == $name) { return cfcms_url_of_file_parameter($cf_channel, $script); }
 	}
-	else if ($script == 'file') {
-		return $cf_channel->base_url.rawurlencode($cf_item->filename);
+	
+	if (   $script == 'filename'
+	    || ($script == 'torrent_file' && MOTC_REWRITE_TORRENTS)
+    	) {
+		return $cf_channel->base_url.rawurlencode($cf_item->$script);
 	}
-	else if ($script == 'torrent' && MOTC_REWRITE_TORRENTS) {
-		return $cf_channel->base_url.rawurlencode($cf_item->torrent_file);
-	}
-	else if ($script == 'torrent') {
+	else if ($script == 'torrent_file') {
 		$url = cf_url_for_script('torrent');
 		$query = 'channel='.rawurlencode($cf_channel->base_url);
 		$query .= '&filename='.rawurlencode($cf_item->filename);
 		
 		return $url.'?'.$query;
 	}
+	else if ($script == 'channel_icon' && $cf_channel->channel_icon != 'motc-channel') {
+		return $cf_channel->base_url.rawurlencode($cf_channel->$script);
+	}
+	else if ($script == 'channel_icon') {
+		return cf_url_for_script('motc-channel');
+	}
 	else if ($script == 'icon' && $cf_item->icon == 'motc-item') {
 		return cf_url_for_script('motc-item');
 	}
 	else if ($script == 'icon') {
-		return $cf_channel->base_url.$cf_item->icon;
-	}
-	else if ($script == 'channel-icon' && $cf_channel->channel_icon == 'motc-channel') {
-		return cf_url_for_script('motc-channel');
-	}
-	else if ($script == 'channel-icon') {
-		return $cf_channel->base_url.$cf_channel->channel_icon;
+		return $cf_channel->base_url.rawurlencode($cf_item->icon);
 	}
 }
 
@@ -62,24 +65,25 @@ function cfcms_config_path($channeldir) {
 }
 
 
+// get the channel config from disk, assuming its registered in the db.
+// upgrade to the current defaults if needed.
 function cms_channel_config($channelurl) {
 	
+	$cf_result = FALSE;
+
 	$queryurl = mysql_real_escape_string($channelurl);
 	$sqlresult = mysql_query('SELECT localdir FROM '.cf_cms_channels_table()." WHERE (localurl=\"$queryurl\")");
-
-	if (!(bool) mysql_num_rows($sqlresult) > 0) {
-		return FALSE;
-	}
-	else {
+	
+	if (mysql_num_rows($sqlresult) > 0) {
 		$result_arr = mysql_fetch_array($sqlresult, MYSQL_ASSOC);
 		$config_path = cfcms_config_path($result_arr['localdir']);
 		if (file_exists($config_path)) {
-			return new SimpleXMLElement($config_path, NULL, TRUE);
-		}
-		else {
-			return FALSE;
+			$cf_result = new SimpleXMLElement($config_path, NULL, TRUE);
+			cms_upgrade_channel($cf_result);
 		}
 	}
+	
+	return $cf_result;
 }
 
 
@@ -88,11 +92,10 @@ function cms_write_channel_config($cf_channel) {
 }
 
 
-function cms_write_channel_rss($cf_channel) {
+function cms_write_channel_rss($cf_channel, $rsspath, $enclose_torrent) {
 	
 	global $cf_motc;
 	
-	$rsspath = $cf_channel->base_path.'/'.$cf_channel->channel_rss_file;
 	$channelxml = new XMLWriter();
 	$channelxml->openURI($rsspath);
 	$channelxml->setIndent(TRUE);
@@ -100,15 +103,22 @@ function cms_write_channel_rss($cf_channel) {
 
 	cms_startChannel($channelxml, $cf_channel);
 	
+	$channel_date = 0;
+	
 	if (isset($cf_channel->items->item)) {
 		foreach ($cf_channel->items->item as $i) {
 
 			if ( $i->status == 'included') {
-				cms_writeItem($channelxml, $i, $cf_channel, TRUE, $date);
+				cms_writeItem($channelxml, $i, $cf_channel, $enclose_torrent, $date);
+				$channel_date = max($date, $channel_date);
 			}
-			$channel_date = max($date, $channel_date);
 		}
 	}
+	
+	if ($channel_date == 0) {
+		$channel_date = time();
+	}
+	
 	$channelxml->writeElement('lastBuildDate', date('r'));
 	$channelxml->writeElement('pubDate', date('r', (int) $channel_date));
 	
@@ -132,29 +142,45 @@ function cms_write_channel_html($cf_channel) {
 	
 	if (isset($cf_channel->channel_icon) && $cf_channel->channel_icon != 'none') {
 		if ($cf_channel->channel_icon == 'motc-channel') {
-			ui_writeImg($xml, cfcms_url_channel_item('channel-icon', $cf_channel), 'Icon', 90, 160);
+			ui_writeImg($xml, cfcms_url_channel_item('channel_icon', $cf_channel), 'Icon', 90, 160);
 		}
 		else {
-			ui_writeImg($xml, cfcms_url_channel_item('channel-icon', $cf_channel), 'Icon');
+			ui_writeImg($xml, cfcms_url_channel_item('channel_icon', $cf_channel), 'Icon');
 		}
 	}
 	$xml->writeElement('h1', $cf_channel->channel_title);
 	
-	ui_writeLink($xml, cfcms_url_channel_item('rss', $cf_channel), 'RSS Feed');
-	$xml->text(' ');
+	$xml->writeElement('p', $cf_channel->channel_desc);
+
+	$xml->writeElement('h2', 'Subscriptions');
+
+	$xml->startElement('ul');
+	$xml->startElement('li');
+	ui_writeLink($xml, cfcms_url_channel_item('channel_rss_file', $cf_channel), 'Bittorrent subscription');
+	if ($cf_channel->publish_non_torrent == 1) { $xml->text(' (preferred; for clients like Miro)'); }
+	$xml->endElement();
+	if ($cf_channel->publish_non_torrent == 1) {
+		$xml->startElement('li');
+		ui_writeLink($xml, cfcms_url_channel_item('channel_nt_rss_file', $cf_channel), 'HTTP subscription');
+		$xml->text(' (for clients like iTunes)');
+		$xml->endElement();
+	}
+	$xml->endElement();
+
+	$xml->startElement('p');
 	$xml->startElement('a');
-	$xml->writeAttribute('href', 'http://subscribe.getMiro.com/?url1='.urlencode($cf_motc['host_url'].cfcms_url_channel_item('rss', $cf_channel)));
+	$xml->writeAttribute('href', 'http://subscribe.getMiro.com/?url1='.rawurlencode($cf_motc['host_url'].cfcms_url_channel_item('channel_rss_file', $cf_channel)));
 	$xml->writeAttribute('title', 'Miro: Internet TV');
 	ui_writeImg($xml, 'http://subscribe.getmiro.com/img/buttons/gabriel1.png', 'Miro Video Player');
 	$xml->endElement();
-	
-	$xml->writeElement('p', $cf_channel->channel_desc);
+	$xml->endElement();
 
 	if (isset($cf_channel->items->item)) {
 		foreach ($cf_channel->items->item as $i) {
 			if ( $i->status == 'included') {
 				$xml->startElement('div');
 				
+				$xml->writeElement('h2', $i->title);
 				if (isset($i->icon) && $i->icon != 'none') {
 					if ($i->icon == 'motc-item') {
 						ui_writeImg($xml, cfcms_url_channel_item('icon', $cf_channel, $i), 'Icon', 90, 160);
@@ -163,14 +189,14 @@ function cms_write_channel_html($cf_channel) {
 						ui_writeImg($xml, cfcms_url_channel_item('icon', $cf_channel, $i), 'Icon');
 					}
 				}
-				$xml->writeElement('h2', $i->title);
 				if (strlen($i->description) > 0) {
 					$xml->writeElement('p', $i->description);
 				}
+				$xml->writeElement('br');
 				$xml->text('(');
-				ui_writeLink($xml, cfcms_url_channel_item('torrent', $cf_channel, $i), 'torrent');
+				ui_writeLink($xml, cfcms_url_channel_item('torrent_file', $cf_channel, $i), 'Bittorrent download');
 				$xml->text('|');
-				ui_writeLink($xml, cfcms_url_channel_item('file', $cf_channel, $i), 'download');
+				ui_writeLink($xml, cfcms_url_channel_item('filename', $cf_channel, $i), 'HTTP download');
 				$xml->text(')');
 
 				$xml->endElement();
@@ -191,7 +217,7 @@ function cms_startChannel($xml, $cf_channel) {
 	
 	global $cf_motc;
 	
-	$htmlurl = $cf_motc['host_url'].cfcms_url_channel_item('html', $cf_channel);
+	$htmlurl = $cf_motc['host_url'].cfcms_url_channel_item('channel_html_file', $cf_channel);
 	
 	$xml->startDocument(NULL, 'utf-8');
 	$xml->startElement('rss');
@@ -206,7 +232,7 @@ function cms_startChannel($xml, $cf_channel) {
 		$xml->startElement('image');
 		$xml->writeElement('link', $htmlurl);
 		$xml->writeElement('title', $cf_channel->channel_title);
-		$xml->writeElement('url', $cf_motc['host_url'].cfcms_url_channel_item('channel-icon', $cf_channel));
+		$xml->writeElement('url', $cf_motc['host_url'].cfcms_url_channel_item('channel_icon', $cf_channel));
 		$xml->writeElement('description', $cf_channel->channel_desc);
 		if ($cf_channel->channel_icon == 'motc-channel') {
 			$xml->writeElement('height', 90);
@@ -232,34 +258,34 @@ function cms_writeItem($xml, $item, $cf_channel, $enclose_torrent, &$date) {
 	$xml->startElement('item');
 	$xml->writeElement('title', $item->title);
 	$xml->writeElement('description', $item->description);
-	$xml->writeElement('link', $cf_motc['host_url'].cfcms_url_channel_item('html', $cf_channel));
+	$xml->writeElement('link', $cf_motc['host_url'].cfcms_url_channel_item('channel_html_file', $cf_channel));
 	$xml->writeElement('guid', $cf_motc['host_url'].$cf_channel->base_url.$item->filename);
 
-	$info = apache_lookup_uri(cfcms_url_channel_item('file', $cf_channel, $item));
+	$info = apache_lookup_uri(cfcms_url_channel_item('filename', $cf_channel, $item));
 	$file_info = stat($cf_channel->base_path.'/'.$item->filename);
 	
 	if ($enclose_torrent) {
 		$xml->startElement('enclosure');
 		$xml->writeAttribute('length', $item->torrent_length);
-		if ($info->content_type) {
+		if (isset($info->content_type)) {
 			$xml->writeAttribute('type', 'application/x-bittorrent;enclosed='.$info->content_type);
 		}
 		else {
 			$xml->writeAttribute('type', 'application/x-bittorrent');
 		}
-		$xml->writeAttribute('url', $cf_motc['host_url'].cfcms_url_channel_item('torrent', $cf_channel, $item));
+		$xml->writeAttribute('url', $cf_motc['host_url'].cfcms_url_channel_item('torrent_file', $cf_channel, $item));
 		$xml->endElement();
 	}
 	else {
 		$xml->startElement('enclosure');
 		$xml->writeAttribute('length', $file_info['size']);
-		if ($info->content_type) {
+		if (isset($info->content_type)) {
 			$xml->writeAttribute('type', $info->content_type);
 		}
 		else {
 			$xml->writeAttribute('type', 'application/octet-stream');// default to an unknown binary file.
 		}
-		$xml->writeAttribute('url', $cf_motc['host_url'].cfcms_url_channel_item('file', $cf_channel, $item));
+		$xml->writeAttribute('url', $cf_motc['host_url'].cfcms_url_channel_item('filename', $cf_channel, $item));
 		$xml->endElement();
 	}
 	
@@ -292,9 +318,11 @@ function cms_infohash_names($infohash) {
 
 
 function cms_is_present($filename, $config) {
+	global $cf_channel_files;
 	
-	if ($config->channel_rss_file == $filename) { return TRUE; }
-	if ($config->channel_html_file == $filename) { return TRUE; }
+	foreach($cf_channel_files as $name) {
+		if ($config->$name == $filename) { return TRUE; }
+	}
 
 	if (isset($config->icons->icon)) { 
 		foreach ($config->icons->icon as $i) {
@@ -430,7 +458,23 @@ function cms_add_icon($cf_channel, $filename) {
 
 	$new_icon = $cf_channel->icons->addChild('icon');
 	$new_icon->filename = $filename;
-	error_log("Icon: $filename", 0);
+}
+
+
+// sorts most recent to top of list
+function cms_time_compare_files($left, $right) {
+	$left_info = stat($left);
+	$right_info = stat($right);
+	
+	if ($left_info['mtime'] > $right_info['mtime']) {
+		return -1;
+	}
+	else if ($left_info['mtime'] == $right_info['mtime']) {
+		return 0;
+	}
+	else {
+		return 1;
+	}
 }
 
 
@@ -441,6 +485,11 @@ function cms_sync_dir_to_channel($cf_channel) {
 	}
 	
 	$channel_candidates = scandir($cf_channel->base_path);
+	
+	$last_dir = getcwd();
+	chdir($cf_channel->base_path);
+	usort($channel_candidates, 'cms_time_compare_files');
+	chdir($last_dir);
 	
 	foreach ($channel_candidates as $index => $filename) {
 		$path = $cf_channel->base_path.'/'.$filename;
@@ -518,7 +567,7 @@ function cms_is_channel_dir($path) {
 
 function cms_make_channel($path, $title) {
 	
-	global $cf_motc;
+	global $cf_motc, $cf_channel_params;
 	
 	if (!file_exists($path)) {
 		//mkdir emits a lot of warnings if we try to use it when we shouldn't.
@@ -561,18 +610,15 @@ function cms_make_channel($path, $title) {
 	
 	$op->startDocument();
 	$op->startElement('motc_channel');
+
+	foreach ($cf_channel_params as $name => $val) {		
+		$op->writeElement($name, $val);
+	}
+
 	$op->writeElement('channel_title', $title);
-	$op->writeElement('channel_desc', MOTC_CHANNEL_DEF_DESC);
 	$op->writeElement('base_url', $url);
 	$op->writeElement('base_path', $path);
-	$op->writeElement('channel_rss_file', MOTC_CHANNEL_RSS_NAME);
-	$op->writeElement('channel_html_file', MOTC_CHANNEL_HTML_NAME);
-	$op->writeElement('publish_html', MOTC_CREATE_HTML);
-	$op->writeElement('publish_admin_link', MOTC_INCLUDE_ADMIN);
-	$op->writeElement('next_id', 0);
-	$op->writeElement('announce_url', $cf_motc['host_url'].cf_url_for_script('announce'));
-	
-	
+	$op->writeElement('announce_url', $cf_motc['host_url'].cf_url_for_script('announce'));	
 	$default_icon = cms_default_icon_for_path($path);
 	if (isset($default_icon)) {
 		$op->writeElement('channel_icon', $default_icon);
@@ -584,6 +630,15 @@ function cms_make_channel($path, $title) {
 	cms_register_channel($url, $path);
 	
 	return $url;
+}
+
+
+function cms_upgrade_channel($cf_channel) {
+	global $cf_channel_params;
+	
+	foreach ($cf_channel_params as $name => $val) {		
+		if (!isset($cf_channel->$name)) { $cf_channel->$name = $val; }
+	}
 }
 
 
@@ -604,12 +659,14 @@ function cms_rmdir($dir) {
 
 
 function cms_remove_channel($channelurl) {
+	global $cf_channel_files;
 	
 	$cf_channel = cms_channel_config($channelurl);
 	if ($cf_channel) {
-		cms_unlink($cf_channel->base_path.'/'.$cf_channel->channel_rss_file);
-		cms_unlink($cf_channel->base_path.'/'.$cf_channel->channel_html_file);
-		
+		foreach($cf_channel_files as $name) {
+			cms_unlink($cf_channel->base_path.'/'.$cf_channel->$name);
+		}
+
 		if (isset($cf_channel->items->item)) {
 			foreach ($cf_channel->items->item as $i) {
 				if (isset($i->torrent_file)) {

@@ -37,8 +37,8 @@ else if (isset($_POST['order-items'])) {
 else if (isset($_POST['edit-channel'])) {
 	$current_page_mode = 'edit-channel';
 }
-else if ($_POST['page'] == 'order-items' && !isset($_POST['display'])) {
-	ui_update_channel_order($cf_channel, $message);
+else if (isset($_POST['page']) && $_POST['page'] == 'order-items' && !isset($_POST['display'])) {
+	ui_update_channel_order($cf_channel);
 	$current_page_mode = 'order-items';
 }
 else if (isset($_POST['save-items'])) {
@@ -55,7 +55,10 @@ else if (isset($_POST['save-channel'])) {
 }
 
 
-cms_write_channel_rss($cf_channel);
+cms_write_channel_rss($cf_channel, $cf_channel->base_path.'/'.$cf_channel->channel_rss_file, TRUE);
+if ($cf_channel->publish_non_torrent == 1) {
+	cms_write_channel_rss($cf_channel, $cf_channel->base_path.'/'.$cf_channel->channel_nt_rss_file, FALSE);
+}
 if ($cf_channel->publish_html == 1) {
 	cms_write_channel_html($cf_channel);
 }
@@ -84,7 +87,7 @@ ui_writeWizardTitle($op, 'Edit', $_GET['channel']);
 $op->writeElement('hr');
 $op->startElement('span');
 $op->writeAttribute('id', 'message');
-if ($message) {
+if (isset($message)) {
 	$op->text($message);
 }
 else {
@@ -110,5 +113,4 @@ else {
 
 ui_writeFooter($op, 'manage');
 ui_endDocument($op);
-
 ?>

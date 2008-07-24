@@ -9,17 +9,15 @@
 require('motc-internal.php');
 $cf_motc = cf_globals();
 db_open();
-$cf_is_authorised = user_connection_is_authorised($cf_user, $cf_is_expired);
-$tables_present = db_tables_present();
 
-if (!$tables_present) {
+if (!db_tables_present()) {
 	db_reset_tables(); 
 	$message = 'Database installed';
-	$tables_present = db_tables_present();
 }
 
+$cf_is_authorised = user_connection_is_authorised($cf_user, $cf_is_expired);
 
-if ($cf_is_authorised && $_POST['action'] == 'reset') {
+if ($cf_is_authorised && isset($_POST['action']) && $_POST['action'] == 'reset') {
 
 	$registered_channels = cms_channels();
 	while ($channel = get_next_record_array($registered_channels)) {
@@ -31,7 +29,6 @@ if ($cf_is_authorised && $_POST['action'] == 'reset') {
 
 	// re-establish if authorised (unlikely after a reset!)
 	$cf_is_authorised = user_connection_is_authorised($cf_user, $cf_is_expired);
-	$tables_present = db_tables_present();
 }
 
 
@@ -61,7 +58,7 @@ ui_writeBrandedTitle($op, 'My Own TV Channel Setup');
 
 $op->writeElement('hr');
 
-if ($message) {
+if (isset($message)) {
 	$op->text($message);
 	$op->writeElement('hr');
 }

@@ -1,10 +1,16 @@
-MyOwnTVChannel v0.1.0
+MyOwnTVChannel v0.2.0
 
 John McAleely
 john@mcaleely.com
-4th June 2008 
+23rd July 2008 
 
-This is alpha quality software. Please work with me as you use this software
+This is beta quality software. Please work with me as you use this software
+
+Changes since version 0.1.0:
+ 
+ * Numerous bug fixes, starting to clean up PHP Notice errors.
+ * Now creates two RSS feeds, with and without torrents.
+ * Initial entry of the items in a channel is in 'last modified time' order.
 
 For details of the BSD licence this software is made available under, see the file LICENCE.
 

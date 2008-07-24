@@ -173,7 +173,7 @@ function ui_update_channel_items($config) {
 		}
 	}
 
-	if ($display_message) {
+	if (isset($display_message) && $display_message) {
 		return 'included files must have a title or description.';
 	}
 
@@ -181,7 +181,7 @@ function ui_update_channel_items($config) {
 }
 
 
-function ui_update_channel_order($config, $message) {
+function ui_update_channel_order($config) {
 
 	if (isset($config->items->item)) {
 		$cursor = 0;

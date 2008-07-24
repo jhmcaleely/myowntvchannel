@@ -14,12 +14,7 @@ require('motc-cms.php');
 
 
 define('MOTC_CHANNEL_CONFIG_NAME', '.channel_config.xml');
-define('MOTC_CHANNEL_RSS_NAME', 'subscription.rss');
 define('MOTC_DEFAULT_HTML', 'index.html');
-define('MOTC_CHANNEL_HTML_NAME', MOTC_DEFAULT_HTML);
-define('MOTC_CREATE_HTML', TRUE);
-define('MOTC_INCLUDE_ADMIN', TRUE);
-define('MOTC_CHANNEL_DEF_DESC', 'My Own TV Channel');
 define('MOTC_CHANNEL_DEF_TITLE', 'My Channel');
 define('MOTC_ICON_NAME', 'MOTC-Icon-160x90.png');
 define('MOTC_ANNOUNCE_INTERVAL', 60*2);
@@ -47,6 +42,17 @@ function cf_user_sessions_table() { return MOTC_DB_TABLE_PREFIX.'usersessions'; 
 
 function cf_user_auth_cookie_name() { return MOTC_COOKIE_NAME; }
 
+$cf_channel_params = array( 'channel_desc' => 'My Own TV Channel'
+						  , 'channel_rss_file' => 'subscription.rss'
+						  , 'channel_nt_rss_file' => 'subscription2.rss'
+						  , 'channel_html_file' => MOTC_DEFAULT_HTML
+						  , 'publish_html' => TRUE
+						  , 'publish_non_torrent' => TRUE
+						  , 'publish_admin_link' => TRUE
+						  , 'next_id' => 0
+						  );
+
+$cf_channel_files = array('channel_rss_file', 'channel_html_file','channel_nt_rss_file');
 
 $cf_schema = array( cf_torrent_session_table() => 'infohash BINARY('.MOTC_INFOHASH_LEN.'), peerid BINARY('.MOTC_PEERID_LEN.'), ip INT, port SMALLINT UNSIGNED, complete BOOL, messagecount TINYINT UNSIGNED, lastseen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
 				  , cf_torrent_infohash_table() => 'infohash BINARY('.MOTC_INFOHASH_LEN.'), completions INT'
@@ -88,7 +94,7 @@ function cf_globals() {
 	
 	$result['script_url'] = $urlinfo['path'];
 	if (isset($_GET['channel'])) {
-		$result['script_url'] .= '?channel='.urlencode($_GET['channel']);
+		$result['script_url'] .= '?channel='.rawurlencode($_GET['channel']);
 	}
 
 	$result['host_url'] = cf_host_url();
@@ -190,6 +196,8 @@ function db_reset_tables() {
 function db_tables_present() {
 
 	global $cf_schema;
+	
+	$db_tables = array();
 
 	$db_results = mysql_query('SHOW TABLES LIKE \''.MOTC_DB_TABLE_PREFIX.'%\'');
 	while ($table = mysql_fetch_array($db_results, MYSQL_NUM)) {
@@ -269,14 +277,17 @@ function get_next_record_array($result) {
 }
 
 
-function user_hash_pw($cleartextpw) {
+function user_hash_pw($username, $cleartextpw) {
 	return md5($username.'MOTC'.$cleartextpw, TRUE);
 }
 
+function broken_user_hash_pw($cleartextpw) {
+	return md5('MOTC'.$cleartextpw, TRUE);
+}
 
 function user_register($username, $cleartextpw) {
 	$queryuser = mysql_real_escape_string($username);
-	$queryhash = mysql_real_escape_string(user_hash_pw($cleartextpw));
+	$queryhash = mysql_real_escape_string(user_hash_pw($username, $cleartextpw));
 	
 	mysql_query('INSERT '.cf_user_id_table()." (username, passhash) VALUES (\"$queryuser\", \"$queryhash\")");
 }
@@ -332,12 +343,23 @@ function user_end_session() {
 
 function user_start_session($username, $cleartextpw) {
 	$queryuser = mysql_real_escape_string($username);
-	$queryhash = mysql_real_escape_string(user_hash_pw($cleartextpw));
+	$queryhash = mysql_real_escape_string(user_hash_pw($username, $cleartextpw));
 	
 	if (!mysql_motc_rec_exists('username', cf_user_id_table(), "username=\"$queryuser\" AND passhash=\"$queryhash\"")) {
-		return FALSE;
+
+		// v 0.1.4 and below were broken, and so lets fix them up. Remove this once the user base is all on this code.
+		$brokenqueryhash = mysql_real_escape_string(broken_user_hash_pw($cleartextpw));
+		if (mysql_motc_rec_exists('username', cf_user_id_table(), "username=\"$queryuser\" AND passhash=\"$brokenqueryhash\"")) {
+			mysql_query('UPDATE '.cf_user_id_table()." SET passhash=\"$queryhash\" WHERE username=\"$queryuser\"");
+			error_log("upgraded user table", 0);
+			// fall through as registered user.
+		}
+		else {
+			return FALSE;
+		}
 	}
-		
+	
+	$token = '';	
 	for ($x = 0; $x < MOTC_SID_LEN; $x++) {
 		$token .= chr(mt_rand(-128, 127));
 	}

@@ -192,7 +192,7 @@ function ui_writeHeader($op, $page = null) {
 	ui_writeLink($op, 'http://myowntvchannel.net/codex/', 'Documentation');	
 	$op->text(' | ');
 
-	$for = 'for='.urlencode($cf_motc['script_url']);
+	$for = 'for='.rawurlencode($cf_motc['script_url']);
 	
 	if ($cf_is_authorised) {
 		$op->text("Logged in as: $cf_user (");
@@ -201,7 +201,7 @@ function ui_writeHeader($op, $page = null) {
 	}
 	else if($cf_is_expired) {
 		$op->text("Session expired: $cf_user (");
-		$query = "?$for&user=".urlencode($cf_user);
+		$query = "?$for&user=".rawurlencode($cf_user);
 		ui_writeLink($op, cf_url_for_script('login').$query, 'Login');
 		$op->text(')');
 	}
@@ -243,10 +243,10 @@ function ui_writeChannelControl($op, $current_channels, $form_dir) {
 			$op->writeElement('td', $cx['localdir']);
 
 			$op->startElement('td');
-			ui_writeLink($op, cf_url_for_script('manage').'?channel='.urlencode($cx['localurl']), 'Details');
+			ui_writeLink($op, cf_url_for_script('manage').'?channel='.rawurlencode($cx['localurl']), 'Details');
 			$op->endElement();
 			$op->startElement('td');
-			ui_writeInputSubmit($op, 'Unregister', ui_name_with_ID('delete', urlencode($cx['localurl'])));
+			ui_writeInputSubmit($op, 'Unregister', ui_name_with_ID('delete', rawurlencode($cx['localurl'])));
 			$op->endElement();
 
 			$op->endElement();
@@ -265,7 +265,7 @@ function ui_writeChannelControl($op, $current_channels, $form_dir) {
 		if ($cx['status'] == 'candidate') {
 			$op->startElement('tr');
 			
-			$pathid = urlencode(realpath($cx['localdir']));
+			$pathid = rawurlencode(realpath($cx['localdir']));
 
 			$op->startElement('td');
 			ui_writeInputText($op, ui_name_with_ID('title', $pathid), 20, MOTC_CHANNEL_DEF_TITLE);
@@ -364,7 +364,7 @@ function ui_writeLogoIconSelect($op, $name, $icons, $default, $logotext, $logova
 	
 	if (count($icons) > 0) {
 		foreach($icons as $i) {
-			$display[] = ui_selectOption($i->filename, $i->filename == $default);
+			$display[] = ui_selectOption($i->filename, ((string) $i->filename) == $default);
 		}
 	}
 	
@@ -391,6 +391,11 @@ function ui_writeInputSelect($op, $name, $items) {
 	$op->endElement();
 }
 
+
+// TRUE and FALSE dont play well with simplexml
+function ui_update_check($name, $cf_channel) {
+	$cf_channel->$name = isset($_POST[$name]) ? 1 : 0;
+}
 
 function ui_startTable($op, $headings) {
 	$op->startElement('table');

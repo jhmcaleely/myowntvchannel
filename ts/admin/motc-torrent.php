@@ -416,7 +416,7 @@ function torrent_write_dictionary($dictionary, $payload, &$io) {
 function torrent_output(&$io, $data) {
 	if (isset($io['out'])) { fwrite($io['out'], $data); }
 	if (isset($io['infohashctx'])) { hash_update($io['infohashctx'], $data); }
-	$io['torrentlength'] += strlen($data);
+	if (isset($io['torrentlength'])) { $io['torrentlength'] += strlen($data); }
 }
 
 

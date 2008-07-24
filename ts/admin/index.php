@@ -33,12 +33,12 @@ if ($cf_is_authorised) {
 	$current_channels = cms_channel_dirs();
 	foreach ($current_channels as $cx) {
 		// $_POST doesn't like variables ending in ., so we use realpath
-		$testpath = urlencode(realpath($cx['localdir']));
+		$testpath = rawurlencode(realpath($cx['localdir']));
 
 		if (isset($_POST['create_'.$testpath])) {
 			make_channel($cx['localdir'], $_POST['title_'.$testpath], $message);
 		}
-		else if (isset($cx['localurl']) && isset($_POST['delete_'.urlencode($cx['localurl'])])) {
+		else if (isset($cx['localurl']) && isset($_POST['delete_'.rawurlencode($cx['localurl'])])) {
 			cms_remove_channel($cx['localurl']);
 			$message = 'Channel deleted';
 		}
@@ -145,6 +145,8 @@ ui_endDocument($op);
 
 
 function make_channel($dir, $title, &$message) {
+	global $cf_motc;
+	
 	$url = cms_make_channel($dir, $title);
 	if ($url !== FALSE) {
 
