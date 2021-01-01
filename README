@@ -2,7 +2,7 @@ MyOwnTVChannel v0.2.1
 
 John McAleely
 john@mcaleely.com
-24th July 2008 
+24th July 2008 (relicenced 1st Jan 2021)
 
 This is beta quality software. Please work with me as you use this software
 
@@ -16,5 +16,5 @@ Changes since version 0.1.0:
  * Now creates two RSS feeds, with and without torrents.
  * Initial entry of the items in a channel is in 'last modified time' order.
 
-For details of the BSD licence this software is made available under, see the file LICENCE.
+For details of the MIT licence this software is made available under, see the file LICENCE.
 
